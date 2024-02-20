@@ -33,18 +33,20 @@ app.get("/api/users", function (req, res) {
 
 app.post("/api/users/:_id/exercises", function (req, res) {
   const formData = req.body;
-  const userId = formData[":_id"];
-  const user = userArr.find((user) => user._id === userId);
+  const userId = req.params._id;
+  const userIndex = userArr.findIndex((user) => user._id === userId);
 
-  if (!user) {
-    res
-      .status(404)
-      .json({ error: "user id not found", id: userId, hint: "try again" });
+  if (userIndex === -1) {
+    res.status(404).json({ error: "user id not found" });
   }
 
   if (!Number.isInteger(parseInt(formData.duration))) {
     return res.status(400).json({ error: "Duration must be an integer" });
   }
+
+  let exerciseDate = formData.date
+    ? formData.date
+    : new Date().toISOString().slice(0, 10);
 
   if (formData.date !== undefined && formData.date !== "") {
     const dateFormatPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -53,22 +55,25 @@ app.post("/api/users/:_id/exercises", function (req, res) {
     }
   }
 
-  if (!user.log) {
-    user.log = [];
+  if (!userArr[userIndex].log) {
+    userArr[userIndex].log = [];
   }
+
   const exercise = {
     description: formData.description,
     duration: parseInt(formData.duration),
-    date: formData.date || new Date().toISOString().slice(0, 10),
+    date: exerciseDate,
   };
-  user.log.push(exercise);
-  res.status(200).json({
-    username: user.username,
+
+  userArr[userIndex].log.push(exercise);
+  const responseObject = {
+    _id: userArr[userIndex]._id,
+    username: userArr[userIndex].username,
     description: exercise.description,
     duration: exercise.duration,
-    date: exercise.date,
-    _id: user._id,
-  });
+    date: new Date(exercise.date).toDateString(),
+  };
+  res.status(200).json(responseObject);
 });
 
 app.get("/api/users/:_id/logs", function (req, res) {
@@ -77,12 +82,32 @@ app.get("/api/users/:_id/logs", function (req, res) {
   if (!user) {
     res.status(404).json({ error: "User not found" });
   }
+
+  let logs = user.log || [];
+
+  const fromDate = req.query.from;
+  const toDate = req.query.to;
+  const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+
+  if (fromDate) {
+    logs = logs.filter((log) => new Date(log.date) >= new Date(fromDate));
+  }
+  if (toDate) {
+    logs = logs.filter((log) => new Date(log.date) <= new Date(toDate));
+  }
+  if (limit !== undefined) {
+    logs = logs.slice(0, limit);
+  }
   var count = user.log.length;
+
+  logs.forEach((log) => {
+    log.date = new Date(log.date).toDateString();
+  });
   res.status(200).json({
     useranem: user.username,
     count: count,
     _id: user._id,
-    log: user.log,
+    log: logs,
   });
 });
 
